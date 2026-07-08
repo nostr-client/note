@@ -407,7 +407,6 @@ class NostrNote extends HTMLElement {
       if (profile.picture?.startsWith('https://')) {
         const img = document.createElement('img')
         img.alt = ''
-        img.loading = 'lazy'
         img.onload = () => { avatar.textContent = ''; avatar.append(img) }
         img.src = profile.picture
       }
