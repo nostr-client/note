@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>note — single nostr note demo</title>
+<link rel="stylesheet" href="https://nostr-client.github.io/theme/theme.css">
+<style>
+  body { max-width: 42rem; margin: 2.5rem auto; padding: 0 1.2rem 4rem; }
+  h1 { font-size: 1.4rem; } h1 a { text-decoration: none; }
+  input { font: inherit; width: 100%; padding: .55em .7em; border-radius: 9px; box-sizing: border-box;
+    border: 1px solid var(--nc-line); background: var(--nc-surface); color: inherit;
+    font-family: var(--nc-mono); font-size: .85rem; margin: .8rem 0 1rem; }
+</style>
+</head>
+<body>
+<h1><a href="https://github.com/nostr-client/note">nostr-client / note</a></h1>
+<p class="nc-muted">One note, one tag. Paste a hex event id (the primitive —
+<code>note1…</code> is display-only):</p>
+
+<input id="in" value="" spellcheck="false" placeholder="64-char hex event id">
+<nostr-note id="note" clickable></nostr-note>
+
+<script type="module">
+  import './note.js'
+  import { defaultPool } from 'https://nostr-client.github.io/pool/pool.js'
+  import { decode } from 'https://nostr-client.github.io/nip19/nip19.js'
+
+  const input = document.getElementById('in')
+  const note = document.getElementById('note')
+
+  // seed the demo with a fresh note from the firehose
+  const seed = await defaultPool().get({ kinds: [1], limit: 1 })
+  if (seed && !input.value) { input.value = seed.id; note.event = seed }
+
+  input.oninput = () => {
+    try { note.setAttribute('event-id', decode(input.value).hex) } catch {}
+  }
+  note.addEventListener('nostr:note-click', (e) => {
+    console.log('nostr:note-click', e.detail.event)
+  })
+</script>
+</body>
+</html>
