@@ -303,13 +303,21 @@ class NostrNote extends HTMLElement {
 
     // optional enhancement point: composed pages that imported reactions.js
     // get a reactions bar on every note, with zero hard coupling here
-    if (customElements.get('nostr-reactions')) {
+    if (customElements.get('nostr-reactions') || customElements.get('btc-tip-button')) {
       const foot = document.createElement('div')
       foot.className = 'foot'
-      const reactions = document.createElement('nostr-reactions')
-      reactions.setAttribute('event-id', event.id)
-      reactions.setAttribute('author', event.pubkey)
-      foot.append(reactions)
+      if (customElements.get('nostr-reactions')) {
+        const reactions = document.createElement('nostr-reactions')
+        reactions.setAttribute('event-id', event.id)
+        reactions.setAttribute('author', event.pubkey)
+        foot.append(reactions)
+      }
+      if (customElements.get('btc-tip-button') && event.pubkey !== window.nostrPubkey) {
+        const tip = document.createElement('btc-tip-button')
+        tip.setAttribute('pubkey', event.pubkey)
+        tip.setAttribute('event-id', event.id)
+        foot.append(tip)
+      }
       body.append(foot)
     }
 
@@ -317,7 +325,7 @@ class NostrNote extends HTMLElement {
 
     if (this.hasAttribute('clickable')) {
       article.addEventListener('click', (e) => {
-        if (e.target.closest('a, img, nostr-reactions')) return
+        if (e.target.closest('a, img, nostr-reactions, btc-tip-button')) return
         this.dispatchEvent(new CustomEvent('nostr:note-click', {
           detail: { event }, bubbles: true, composed: true,
         }))
