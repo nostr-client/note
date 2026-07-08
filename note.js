@@ -189,6 +189,10 @@ const TEMPLATE = /* html */ `
   :host([clickable]) article:hover { border-color: var(--nc-faint, #a8a4b0); }
   :host([highlight]) article { border-color: var(--nc-accent, #7c3aed);
     box-shadow: var(--nc-shadow-pop, 0 2px 6px rgb(32 27 51 / 8%), 0 16px 48px -12px rgb(32 27 51 / 18%)); }
+  :host([flat]) article { border: 0; border-bottom: 1px solid var(--nc-line, #e9e6e0);
+    border-radius: 0; box-shadow: none; background: transparent; }
+  :host([flat]) article:hover { background: var(--nc-inset, #f4f2ee); border-color: var(--nc-line, #e9e6e0); }
+  .meta .handle { color: var(--nc-faint, #a8a4b0); font-weight: 400; }
   .avatar { width: 42px; height: 42px; border-radius: 50%; flex: none;
     object-fit: cover; background: var(--nc-inset, #f4f2ee);
     border: 1px solid var(--nc-line, #e9e6e0); }
@@ -275,11 +279,13 @@ class NostrNote extends HTMLElement {
     const name = document.createElement('span')
     name.className = 'name'
     name.textContent = npubShort(event.pubkey)
+    const handle = document.createElement('span')
+    handle.className = 'handle'
     const when = document.createElement('span')
     when.className = 'when'
     when.textContent = ' · ' + formatAgo(event.created_at)
     when.title = new Date(event.created_at * 1000).toLocaleString()
-    meta.append(name, when)
+    meta.append(name, handle, when)
 
     const content = document.createElement('div')
     content.className = 'content'
@@ -316,7 +322,10 @@ class NostrNote extends HTMLElement {
     profiles(this.pool ?? defaultPool()).get(event.pubkey, (profile) => {
       if (!profile || this._event !== event) return
       const display = profile.display_name || profile.name
-      if (display) name.textContent = display
+      if (display) {
+        name.textContent = display
+        handle.textContent = ' @' + (profile.nip05?.replace(/^_@/, '') || npubShort(event.pubkey))
+      }
       if (profile.picture?.startsWith('https://')) avatar.src = profile.picture
     })
 
