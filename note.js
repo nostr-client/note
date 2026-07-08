@@ -198,6 +198,9 @@ const TEMPLATE = /* html */ `
     border-radius: 0; box-shadow: none; background: transparent; }
   :host([flat]) article:hover { background: var(--nc-inset, #f4f2ee); border-color: var(--nc-line, #e9e6e0); }
   .meta .handle { color: var(--nc-faint, #a8a4b0); font-weight: 400; }
+  .who { cursor: pointer; }
+  .who:hover .name { text-decoration: underline; }
+  .avatar { cursor: pointer; }
   .avatar { width: 42px; height: 42px; border-radius: 50%; flex: none;
     object-fit: cover; background: var(--nc-inset, #f4f2ee);
     border: 1px solid var(--nc-line, #e9e6e0); }
@@ -281,16 +284,33 @@ class NostrNote extends HTMLElement {
     body.className = 'body'
     const meta = document.createElement('div')
     meta.className = 'meta'
+    const who = document.createElement('span')
+    who.className = 'who'
     const name = document.createElement('span')
     name.className = 'name'
     name.textContent = npubShort(event.pubkey)
     const handle = document.createElement('span')
     handle.className = 'handle'
+    who.append(name, handle)
     const when = document.createElement('span')
     when.className = 'when'
     when.textContent = ' · ' + formatAgo(event.created_at)
     when.title = new Date(event.created_at * 1000).toLocaleString()
-    meta.append(name, handle, when)
+    meta.append(who, when)
+
+    // QoL: author avatar + name open the profile (clients route via
+    // nostr:profile-click; elsewhere it falls back to the profile page)
+    const openProfile = (e) => {
+      e.stopPropagation()
+      const custom = new CustomEvent('nostr:profile-click', {
+        detail: { pubkey: event.pubkey }, bubbles: true, composed: true, cancelable: true,
+      })
+      if (this.dispatchEvent(custom)) {
+        window.open('https://nostr-client.github.io/profile/#' + event.pubkey, '_blank', 'noopener')
+      }
+    }
+    avatar.addEventListener('click', openProfile)
+    who.addEventListener('click', openProfile)
 
     const content = document.createElement('div')
     content.className = 'content'
