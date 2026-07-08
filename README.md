@@ -21,11 +21,15 @@ el.event = someNostrEvent      // or render an event you already have
 ```
 
 Attributes: `clickable` (dispatches `nostr:note-click` with `{ event }`),
-`highlight` (accent border — used by thread for the focused note).
+`highlight` (accent border — used by thread for the focused note),
+`flat` (hairline row instead of a card — for bluesky/mastodon-style timelines).
+Cards show `@handles` (nip05 or short npub) once profiles resolve, and content
+is rich: `nostr:` mentions, quoted notes, clickable #hashtags, inline media.
 
 If the page has also imported
-[reactions](https://github.com/nostr-client/reactions), every note card grows
-a reactions bar automatically — optional enhancement, zero hard coupling.
+[reactions](https://github.com/nostr-client/reactions) every card grows a
+reactions bar, and with [wallet](https://github.com/nostr-client/wallet) an
+instant ₿ tip button — optional enhancements, zero hard coupling.
 
 ## Shared helpers (exported)
 
