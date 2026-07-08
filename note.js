@@ -122,6 +122,18 @@ export function renderContentInto(el, text, { maxLength = 2000, quoteDepth = 1, 
   el.append(text.slice(last))
 }
 
+// live "3m ago" labels: registered <time-ago> spans tick every 30s
+const _agoRegistry = new Set()
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    for (const ref of _agoRegistry) {
+      const el = ref.deref()
+      if (!el || !el.isConnected) { _agoRegistry.delete(ref); continue }
+      el.textContent = ' · ' + formatAgo(Number(el.dataset.ts))
+    }
+  }, 30_000)
+}
+
 export function formatAgo(ts) {
   const s = Math.max(1, Math.floor(Date.now() / 1000 - ts))
   if (s < 60) return s + 's'
@@ -300,6 +312,8 @@ class NostrNote extends HTMLElement {
     when.className = 'when'
     when.textContent = ' · ' + formatAgo(event.created_at)
     when.title = new Date(event.created_at * 1000).toLocaleString()
+    when.dataset.ts = event.created_at
+    _agoRegistry.add(new WeakRef(when))
     meta.append(who, when)
 
     // QoL: author avatar + name open the profile (clients route via
