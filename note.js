@@ -17,7 +17,7 @@
  */
 
 import { defaultPool } from 'https://nostr-client.github.io/pool/pool.js'
-import { npubShort, decodeAny } from 'https://nostr-client.github.io/nip19/nip19.js'
+import { npubShort, noteEncode, decodeAny } from 'https://nostr-client.github.io/nip19/nip19.js'
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|avif)(\?\S*)?$/i
 const VIDEO_RE = /\.(mp4|webm|mov)(\?\S*)?$/i
@@ -221,7 +221,11 @@ const TEMPLATE = /* html */ `
   .missing { padding: .9rem 1rem; border: 1px dashed var(--nc-line, #e9e6e0);
     border-radius: var(--nc-radius, 14px); color: var(--nc-faint, #a8a4b0);
     font-size: .85rem; }
-  .foot { margin-top: .4rem; }
+  .foot { margin-top: .4rem; display: flex; gap: .4rem; align-items: center; }
+  .foot .action { font: inherit; font-size: .8rem; cursor: pointer; background: none;
+    border: 1px solid transparent; border-radius: 999px; padding: .25em .55em;
+    color: var(--nc-soft, #6d6a76); }
+  .foot .action:hover { background: var(--nc-inset, #f4f2ee); }
 </style>
 <div id="root"></div>
 `
@@ -326,6 +330,18 @@ class NostrNote extends HTMLElement {
     if (customElements.get('nostr-reactions') || customElements.get('btc-tip-button')) {
       const foot = document.createElement('div')
       foot.className = 'foot'
+      // reply — same affordance as the card click, where people expect it
+      const reply = document.createElement('button')
+      reply.className = 'action'
+      reply.title = 'reply'
+      reply.textContent = '💬'
+      reply.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.dispatchEvent(new CustomEvent('nostr:note-click', {
+          detail: { event }, bubbles: true, composed: true,
+        }))
+      })
+      foot.append(reply)
       if (customElements.get('nostr-reactions')) {
         const reactions = document.createElement('nostr-reactions')
         reactions.setAttribute('event-id', event.id)
@@ -338,6 +354,17 @@ class NostrNote extends HTMLElement {
         tip.setAttribute('event-id', event.id)
         foot.append(tip)
       }
+      const share = document.createElement('button')
+      share.className = 'action'
+      share.title = 'copy link'
+      share.textContent = '↗'
+      share.addEventListener('click', (e) => {
+        e.stopPropagation()
+        navigator.clipboard?.writeText('https://njump.me/' + noteEncode(event.id))
+        share.textContent = '✓'
+        setTimeout(() => { share.textContent = '↗' }, 1500)
+      })
+      foot.append(share)
       body.append(foot)
     }
 
@@ -345,7 +372,7 @@ class NostrNote extends HTMLElement {
 
     if (this.hasAttribute('clickable')) {
       article.addEventListener('click', (e) => {
-        if (e.target.closest('a, img, nostr-reactions, btc-tip-button')) return
+        if (e.target.closest('a, img, nostr-reactions, btc-tip-button, button')) return
         this.dispatchEvent(new CustomEvent('nostr:note-click', {
           detail: { event }, bubbles: true, composed: true,
         }))
