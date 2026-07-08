@@ -33,7 +33,12 @@ const TOKEN_RE = /(https?:\/\/[^\s<>"')\]]+)|(?:nostr:)?((?:npub|nprofile|note|n
  * - #hashtags → clicking emits 'nostr:hashtag-click' { tag }
  * Class hooks for host styles: .mention, .hashtag, .quote
  */
+const ENTITIES = { '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" }
+
 export function renderContentInto(el, text, { maxLength = 2000, quoteDepth = 1, pool } = {}) {
+  // bots paste HTML entities into plaintext; decode the common ones (safe:
+  // output is always text nodes, never markup)
+  text = text.replace(/&(?:nbsp|amp|lt|gt|quot|#39);/g, (m) => ENTITIES[m])
   if (text.length > maxLength) text = text.slice(0, maxLength) + '…'
   let last = 0
   for (const match of text.matchAll(TOKEN_RE)) {
