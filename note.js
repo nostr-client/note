@@ -17,33 +17,102 @@
  */
 
 import { defaultPool } from 'https://nostr-client.github.io/pool/pool.js'
-import { npubShort } from 'https://nostr-client.github.io/nip19/nip19.js'
+import { npubShort, decodeAny } from 'https://nostr-client.github.io/nip19/nip19.js'
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|avif)(\?\S*)?$/i
-const URL_RE = /https?:\/\/[^\s<>"')\]]+/g
+const VIDEO_RE = /\.(mp4|webm|mov)(\?\S*)?$/i
+// one token pass: URLs, nostr: references, hashtags
+const TOKEN_RE = /(https?:\/\/[^\s<>"')\]]+)|(?:nostr:)?((?:npub|nprofile|note|nevent|naddr)1[02-9ac-hj-np-z]{20,})|(^|\s)#([\p{L}\p{N}_]+)/giu
 
-/** Build text + links + inline images with DOM nodes — never innerHTML. */
-export function renderContentInto(el, text, { maxLength = 2000 } = {}) {
+/**
+ * Rich, safe content rendering — built from DOM nodes only, never innerHTML.
+ * - links (rel=noopener), inline images and video
+ * - nostr:npub / nprofile → @name mentions (resolved live); clicking emits
+ *   'nostr:profile-click' { pubkey } (bubbling, composed)
+ * - nostr:note / nevent → embedded quoted <nostr-note> (one level deep)
+ * - #hashtags → clicking emits 'nostr:hashtag-click' { tag }
+ * Class hooks for host styles: .mention, .hashtag, .quote
+ */
+export function renderContentInto(el, text, { maxLength = 2000, quoteDepth = 1, pool } = {}) {
   if (text.length > maxLength) text = text.slice(0, maxLength) + '…'
   let last = 0
-  for (const match of text.matchAll(URL_RE)) {
+  for (const match of text.matchAll(TOKEN_RE)) {
+    const [, url, nostrRef, hashPre, hashtag] = match
     el.append(text.slice(last, match.index))
-    const url = match[0]
-    if (IMAGE_RE.test(url)) {
-      const img = document.createElement('img')
-      img.src = url
-      img.alt = ''
-      img.loading = 'lazy'
-      el.append(img)
-    } else {
-      const a = document.createElement('a')
-      a.href = url
-      a.textContent = url.length > 60 ? url.slice(0, 60) + '…' : url
-      a.target = '_blank'
-      a.rel = 'noopener noreferrer'
-      el.append(a)
+    last = match.index + match[0].length
+
+    if (url) {
+      if (IMAGE_RE.test(url)) {
+        const img = document.createElement('img')
+        img.src = url
+        img.alt = ''
+        img.loading = 'lazy'
+        el.append(img)
+      } else if (VIDEO_RE.test(url)) {
+        const video = document.createElement('video')
+        video.src = url
+        video.controls = true
+        video.preload = 'metadata'
+        el.append(video)
+      } else {
+        const a = document.createElement('a')
+        a.href = url
+        a.textContent = url.length > 60 ? url.slice(0, 60) + '…' : url
+        a.target = '_blank'
+        a.rel = 'noopener noreferrer'
+        el.append(a)
+      }
+      continue
     }
-    last = match.index + url.length
+
+    if (nostrRef) {
+      let ref
+      try { ref = decodeAny(nostrRef) } catch { el.append(match[0]); continue }
+      if (ref.type === 'npub' || ref.type === 'nprofile') {
+        const mention = document.createElement('a')
+        mention.className = 'mention'
+        mention.href = 'https://nostr-client.github.io/profile/#' + ref.hex
+        mention.target = '_blank'
+        mention.rel = 'noopener noreferrer'
+        mention.textContent = '@' + npubShort(ref.hex)
+        mention.addEventListener('click', (e) => {
+          const custom = new CustomEvent('nostr:profile-click', {
+            detail: { pubkey: ref.hex }, bubbles: true, composed: true, cancelable: true,
+          })
+          if (!el.dispatchEvent(custom)) e.preventDefault() // a client handled it
+        })
+        profiles(pool).get(ref.hex, (profile) => {
+          const display = profile?.display_name || profile?.name
+          if (display) mention.textContent = '@' + display
+        })
+        el.append(mention)
+      } else if ((ref.type === 'note' || ref.type === 'nevent') && quoteDepth > 0 && customElements.get('nostr-note')) {
+        const quote = document.createElement('nostr-note')
+        quote.className = 'quote'
+        quote.setAttribute('clickable', '')
+        quote.dataset.quoteDepth = quoteDepth - 1
+        quote.setAttribute('event-id', ref.hex)
+        el.append(quote)
+      } else {
+        el.append(match[0]) // naddr etc: leave as text for now
+      }
+      continue
+    }
+
+    if (hashtag !== undefined) {
+      el.append(hashPre)
+      const tag = document.createElement('a')
+      tag.className = 'hashtag'
+      tag.href = '#'
+      tag.textContent = '#' + hashtag
+      tag.addEventListener('click', (e) => {
+        e.preventDefault()
+        el.dispatchEvent(new CustomEvent('nostr:hashtag-click', {
+          detail: { tag: hashtag.toLowerCase() }, bubbles: true, composed: true,
+        }))
+      })
+      el.append(tag)
+    }
   }
   el.append(text.slice(last))
 }
@@ -130,8 +199,13 @@ const TEMPLATE = /* html */ `
   .content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55;
     font-family: var(--nc-font-content, inherit); }
   .content a { color: var(--nc-accent, #7c3aed); }
+  .content a.mention, .content a.hashtag { text-decoration: none; font-weight: 600; }
+  .content a.mention:hover, .content a.hashtag:hover { text-decoration: underline; }
   .content img { max-width: 100%; max-height: 22rem; border-radius: 10px;
     display: block; margin-top: .5rem; border: 1px solid var(--nc-line, #e9e6e0); }
+  .content video { max-width: 100%; max-height: 22rem; border-radius: 10px;
+    display: block; margin-top: .5rem; }
+  .content nostr-note { display: block; margin-top: .5rem; --nc-shadow: none; }
   .missing { padding: .9rem 1rem; border: 1px dashed var(--nc-line, #e9e6e0);
     border-radius: var(--nc-radius, 14px); color: var(--nc-faint, #a8a4b0);
     font-size: .85rem; }
@@ -209,7 +283,10 @@ class NostrNote extends HTMLElement {
 
     const content = document.createElement('div')
     content.className = 'content'
-    renderContentInto(content, event.content)
+    renderContentInto(content, event.content, {
+      quoteDepth: Number(this.dataset.quoteDepth ?? 1),
+      pool: this.pool ?? undefined,
+    })
 
     body.append(meta, content)
 
