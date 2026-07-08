@@ -214,8 +214,10 @@ const TEMPLATE = /* html */ `
   .who:hover .name { text-decoration: underline; }
   .avatar { cursor: pointer; }
   .avatar { width: 42px; height: 42px; border-radius: 50%; flex: none;
-    object-fit: cover; background: var(--nc-inset, #f4f2ee);
-    border: 1px solid var(--nc-line, #e9e6e0); }
+    overflow: hidden; display: grid; place-items: center;
+    color: #fff; font-weight: 700; font-size: 1.05rem; user-select: none;
+    border: 1px solid rgb(0 0 0 / 6%); }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
   .body { min-width: 0; flex: 1; }
   .meta { font-size: .8rem; margin-bottom: .25rem; }
   .meta .name { font-weight: 650; }
@@ -291,10 +293,11 @@ class NostrNote extends HTMLElement {
     this.root.innerHTML = ''
     const article = document.createElement('article')
 
-    const avatar = document.createElement('img')
+    const avatar = document.createElement('span')
     avatar.className = 'avatar'
-    avatar.alt = ''
-    avatar.loading = 'lazy'
+    const hue = parseInt(event.pubkey.slice(0, 4), 16) % 360
+    avatar.style.background =
+      `linear-gradient(135deg, hsl(${hue} 62% 60%), hsl(${(hue + 55) % 360} 62% 44%))`
 
     const body = document.createElement('div')
     body.className = 'body'
@@ -400,7 +403,14 @@ class NostrNote extends HTMLElement {
         name.textContent = display
         handle.textContent = ' @' + (profile.nip05?.replace(/^_@/, '') || npubShort(event.pubkey))
       }
-      if (profile.picture?.startsWith('https://')) avatar.src = profile.picture
+      if (display && !avatar.querySelector('img')) avatar.textContent = [...display][0].toUpperCase()
+      if (profile.picture?.startsWith('https://')) {
+        const img = document.createElement('img')
+        img.alt = ''
+        img.loading = 'lazy'
+        img.onload = () => { avatar.textContent = ''; avatar.append(img) }
+        img.src = profile.picture
+      }
     })
 
     this.root.append(article)
