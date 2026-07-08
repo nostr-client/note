@@ -42,13 +42,13 @@ export function renderContentInto(el, text, { maxLength = 2000, quoteDepth = 1, 
     last = match.index + match[0].length
 
     if (url) {
-      if (IMAGE_RE.test(url)) {
+      if (IMAGE_RE.test(url) && url.startsWith('https://')) {
         const img = document.createElement('img')
         img.src = url
         img.alt = ''
         img.loading = 'lazy'
         el.append(img)
-      } else if (VIDEO_RE.test(url)) {
+      } else if (VIDEO_RE.test(url) && url.startsWith('https://')) {
         const video = document.createElement('video')
         video.src = url
         video.controls = true
@@ -317,7 +317,7 @@ class NostrNote extends HTMLElement {
       if (!profile || this._event !== event) return
       const display = profile.display_name || profile.name
       if (display) name.textContent = display
-      if (profile.picture) avatar.src = profile.picture
+      if (profile.picture?.startsWith('https://')) avatar.src = profile.picture
     })
 
     this.root.append(article)
