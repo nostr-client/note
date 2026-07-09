@@ -144,13 +144,16 @@ export function formatAgo(ts) {
 
 /**
  * Page-wide batched profile (kind 0) resolver. Any component can call
- * profiles().get(pubkey, cb): cb fires immediately if cached, and again when
- * the batched relay query lands. One cache and one query stream per page.
+ * profiles().get(pubkey, cb): cb fires immediately if cached, streams in as
+ * relays answer (a cb may fire more than once as fresher profiles arrive),
+ * and fires with null if nothing was found. One cache and one query stream
+ * per page.
  */
 class ProfileResolver {
   constructor(pool) {
     this.pool = pool
     this.cache = new Map()      // pubkey -> profile object | null (queried, none found)
+    this.newest = new Map()     // pubkey -> created_at of the event behind cache
     this.waiting = new Map()    // pubkey -> Set<cb>
     this.pending = new Set()
     this.timer = null
@@ -165,24 +168,35 @@ class ProfileResolver {
     this.timer = setTimeout(() => this._flush(), 300)
   }
 
-  async _flush() {
-    const authors = [...this.pending]
+  _flush() {
+    const authors = new Set(this.pending)
     this.pending.clear()
-    if (!authors.length) return
-    const events = await this.pool.list([{ kinds: [0], authors, limit: authors.length }])
-    const newest = new Map()
-    for (const ev of events) {
-      const prev = newest.get(ev.pubkey)
-      if (!prev || prev.created_at < ev.created_at) newest.set(ev.pubkey, ev)
-    }
-    for (const pk of authors) {
-      let profile = null
-      const ev = newest.get(pk)
-      if (ev) { try { profile = JSON.parse(ev.content) } catch {} }
-      this.cache.set(pk, profile)
-      for (const cb of this.waiting.get(pk) ?? []) cb(profile)
-      this.waiting.delete(pk)
-    }
+    if (!authors.size) return
+    // stream: don't hold every name hostage until the slowest relay EOSEs —
+    // fire callbacks as events land, newest per author wins
+    const sub = this.pool.subscribe(
+      [{ kinds: [0], authors: [...authors], limit: authors.size }],
+      {
+        onEvent: (ev) => {
+          if (!authors.has(ev.pubkey)) return
+          if ((this.newest.get(ev.pubkey) ?? -1) >= ev.created_at) return
+          this.newest.set(ev.pubkey, ev.created_at)
+          let profile = null
+          try { profile = JSON.parse(ev.content) } catch {}
+          this.cache.set(ev.pubkey, profile)
+          for (const cb of this.waiting.get(ev.pubkey) ?? []) cb(profile)
+        },
+        onEose: () => {
+          sub.close()
+          for (const pk of authors) {
+            // never overwrite a profile another flush already resolved
+            if (!this.cache.has(pk)) this.cache.set(pk, null)
+            if (this.newest.has(pk)) { this.waiting.delete(pk); continue }
+            for (const cb of this.waiting.get(pk) ?? []) cb(null)
+            this.waiting.delete(pk)
+          }
+        },
+      })
   }
 }
 
